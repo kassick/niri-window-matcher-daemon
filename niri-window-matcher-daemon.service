@@ -1,0 +1,13 @@
+[Unit]
+Description=Daemon that applies some extra rules to windows under niri
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+
+[Service]
+ExecStart=/home/kassick/.local/bin/niri-window-matcher-daemon
+ExecReload=kill -SIGUSR2 $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target
