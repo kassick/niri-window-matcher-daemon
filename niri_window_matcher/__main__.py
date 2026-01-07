@@ -16,6 +16,7 @@ from typing import (
     Sequence,
 )
 
+from niri_window_matcher.logger import logger
 from niri_window_matcher.actions import resize_to_output
 from niri_window_matcher.matchers import (
     LargeWindowMatcher,
@@ -47,9 +48,7 @@ RULES = [
                 ]
             )
         ],
-        actions=[
-            partial(resize_to_output, side_panel_widths=49, top_bottom_panel_heights=30)
-        ],
+        actions=[resize_to_output],
     )
     # window-rule {} with one match.
     # Rule([Match(title="Bitwarden", app_id="firefox")]),
@@ -66,11 +65,6 @@ RULES = [
     #     ]
     # ),
 ]
-
-
-if len(RULES) == 0:
-    print("fill in the RULES list, then run the script")
-    exit()
 
 
 def handle_matches(niri_state: NiriState, window: WindowEntryDict) -> bool:
@@ -97,9 +91,9 @@ def handle_matches(niri_state: NiriState, window: WindowEntryDict) -> bool:
 
     # Handle actions
     for rule in matching_rules:
-        print(f"Window {window['id']} matches rule {rule}")
+        logger.debug(f"Window {window['id']} matches rule {rule}")
         for action in rule.actions:
-            print(f"Performing action {action}")
+            logger.debug(f"Performing action {action}")
             action(niri_state, window)
 
     return True
@@ -117,39 +111,45 @@ def handle_single_window_and_update(
 
 
 def handle_event(niri_state: NiriState, event: dict):
-    print(f"event line has keys {event.keys()}")
+    logger.debug(f"event line has keys {event.keys()}")
 
     if workspaces_changed := event.get("WorkspacesChanged"):
         # First event is always WorkspaceChanged. Also, when outputs are connected
         # or disconnected, a WorkspaceChanged event will also happen. Take the
         # change to update the local niri state
-        print("Handling Workspaces")
+        logger.debug("Handling Workspaces")
         workspace_list: Sequence[WorkspaceEntryDict] = workspaces_changed["workspaces"]
         niri_state.workspaces = {ws["id"]: ws for ws in workspace_list}
         niri_state.refresh_outputs()
 
     elif windows_changed := event.get("WindowsChanged"):
         # Initialization Event with all windows
-        print("Handling Windowschanged")
+        logger.debug("Handling WindowsChanged")
         window: WindowEntryDict
         for window in windows_changed["windows"]:
             handle_single_window_and_update(niri_state, window)
 
     elif window_opened_or_changed := event.get("WindowOpenedOrChanged"):
         # New window or some other relevant update
-        print("Handling WindowOpenedOrChanged")
+        logger.debug("Handling WindowOpenedOrChanged")
         window = window_opened_or_changed["window"]
         handle_single_window_and_update(niri_state, window)
 
     elif window_closed := event.get("WindowClosed"):
-        print("Handling WindowClosed")
+        logger.debug("Handling WindowClosed")
         niri_state.remove_window(window_closed["id"])
 
 
 def main():
     # Initialize the state
+    logger.info("Niri Window Matcher Daemon -- Initializing")
+    if len(RULES) == 0:
+        logger.error("fill in the RULES list, then run the script")
+        exit()
+
     niri_state = NiriState()
 
+    logger.info("Reading the event stream...")
     for line in niri_event_stream():
         event: dict = json.loads(line)
         handle_event(niri_state, event)
