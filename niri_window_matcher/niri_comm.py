@@ -40,6 +40,9 @@ def niri_socket_send_msg(request):
     print(f"Sending {request}")
     with socket(AF_UNIX) as niri_socket:
         niri_socket.connect(os.environ["NIRI_SOCKET"])
+        #niri_socket.sendall(f"{json.dumps(request)}\n")
         file = niri_socket.makefile("rw")
-        _ = file.write(json.dumps(request))
+        _ = file.write(json.dumps(request)+ "\n")
         file.flush()
+        response = file.readline()
+        return json.loads(response)
