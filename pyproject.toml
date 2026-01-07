@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "niri-window-matcher"
+version = "0.1.0"
+description = "Dynamic window rule daemon for Niri window manager"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+keywords = ["niri", "window-manager", "wayland"]
+
+[project.scripts]
+niri-window-matcher-daemon = "niri_window_matcher.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["niri_window_matcher*"]
