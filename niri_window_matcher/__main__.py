@@ -26,7 +26,6 @@ them afterward. This script is like open-float for those windows.
 Usage: fill in the RULES array below, then run the script.
 """
 
-from functools import partial
 import json
 from typing import (
     Sequence,
@@ -36,8 +35,8 @@ from niri_window_matcher.logger import logger
 from niri_window_matcher.actions import resize_to_output
 from niri_window_matcher.matchers import (
     LargeWindowMatcher,
-    MatchesAll,
     NewWindowMatcher,
+    FloatWindowMatcher,
     Rule,
 )
 from niri_window_matcher.niri_comm import niri_event_stream
@@ -47,23 +46,19 @@ from niri_window_matcher.niri_types import (
     WorkspaceEntryDict,
 )
 
-
 # Write your rules here. One Rule() = one window-rule {}.
 RULES = [
     Rule(
-        match=[
-            MatchesAll(
-                matchers=[
-                    NewWindowMatcher(),
-                    LargeWindowMatcher(
-                        # These depend on panels -- these values come from my
-                        # waybar setup
-                        side_panel_widths=49,
-                        top_bottom_panel_heights=30,
-                    ),
-                ]
+        match=(
+            ~FloatWindowMatcher &
+            NewWindowMatcher &
+            LargeWindowMatcher(
+                # These depend on panels -- these values come from my
+                # waybar setup
+                side_panel_widths=49,
+                top_bottom_panel_heights=30,
             )
-        ],
+        ),
         actions=[resize_to_output],
     )
     # window-rule {} with one match.

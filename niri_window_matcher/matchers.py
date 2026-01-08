@@ -14,57 +14,124 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with niri-window-matcher.  If not, see <https://www.gnu.org/licenses/>.
 
+from ast import TypeVar
 from dataclasses import dataclass, field
 import re
 from typing import (
     Any,
     Callable,
     Protocol,
+    Self,
     Sequence,
+    Type,
+    Union,
 )
 
 from niri_window_matcher.niri_types import NiriState, WindowEntryDict
 
+Result = TypeVar("Result")
 
-class Matcher(Protocol):
+
+# def _class_or_instance[Result](obj: Result | Type[Result]) -> Result:
+#     if isinstance(obj, type):
+#         return obj()  # type: ignore
+#     return obj
+
+
+class Matcher:
     def matches(self, niri_state: NiriState, window: WindowEntryDict) -> bool: ...
 
+    def __and__(self, other: "Matcher"):
+        return AndMatcher(self, other)
 
-class AlwaysMatches:
-    def matches(self, niri_state, window: WindowEntryDict):
+    def __or__(self, other: "Matcher"):
+        return OrMatcher(self, other)
+
+    def __invert__(self):
+        return NotMatcher(self)
+
+
+class _ConstTrueMatcher(Matcher):
+    def matches(self, niri_state, window):
         return True
 
 
+ConstTrueMatcher = _ConstTrueMatcher()
+
+
+class _ConstFalseMatcher(Matcher):
+    def matches(self, niri_state, window):
+        return False
+
+
+ConstFalseMatcher = _ConstFalseMatcher()
+
+
 @dataclass
-class MatchesAll:
-    matchers: Sequence[Matcher]
+class NotMatcher(Matcher):
+    matcher: Matcher
 
     def matches(self, niri_state, window):
-        return all(matcher.matches(niri_state, window) for matcher in self.matchers)
+        return not self.matcher.matches(niri_state, window)
+
+
+@dataclass
+class AndMatcher(Matcher):
+    left: Matcher
+    right: Matcher
+
+    def matches(self, niri_state, window):
+        return (
+            #
+            self.left.matches(niri_state, window)
+            and
+            #
+            self.right.matches(niri_state, window)
+        )
+
+
+@dataclass
+class OrMatcher(Matcher):
+    left: Matcher
+    right: Matcher
+
+    def matches(self, niri_state, window):
+        return (
+            #
+            self.left.matches(niri_state, window)
+            or
+            #
+            self.right.matches(niri_state, window)
+        )
 
 
 @dataclass(kw_only=True)
-class TitleRegexMatch:
+class TitleRegexMatch(Matcher):
     title: str
 
     def matches(self, niri_state, window: WindowEntryDict):
-        return self.title and re.search(self.title, window["title"]) is not None
+        return bool(self.title) and re.search(self.title, window["title"]) is not None
 
 
 @dataclass(kw_only=True)
-class AppidRegexMatch:
+class AppidRegexMatch(Matcher):
     app_id: str
 
     def matches(self, niri_state, window: WindowEntryDict):
-        return self.app_id and re.search(self.app_id, window["app_id"]) is not None
+        return (
+            bool(self.app_id) and re.search(self.app_id, window["app_id"]) is not None
+        )
 
 
-class NewWindowMatcher:
+class _NewWindowMatcher(Matcher):
     def matches(self, niri_state: NiriState, window: WindowEntryDict):
         return window["id"] not in niri_state.windows
 
 
-class LargeWindowMatcher:
+NewWindowMatcher = _NewWindowMatcher()
+
+
+class LargeWindowMatcher(Matcher):
     def __init__(
         self,
         side_panel_widths: int,
@@ -88,20 +155,24 @@ class LargeWindowMatcher:
         )
 
 
+class _FloatWindowMatcher(Matcher):
+    def matches(self, niri_state: NiriState, window: WindowEntryDict):
+        return window["is_floating"]
+
+
+FloatWindowMatcher = _FloatWindowMatcher()
+
+
 @dataclass
 class Rule:
-    match: list[Matcher] = field(default_factory=list)
-    exclude: list[Matcher] = field(default_factory=list)
+    match: Matcher = field(default=ConstTrueMatcher)
+    exclude: Matcher = field(default=ConstFalseMatcher)
 
     actions: Sequence[Callable[[NiriState, WindowEntryDict], Any]] = field(
         default_factory=list
     )
 
     def matches(self, niri_state: NiriState, window: WindowEntryDict):
-        return (
-            # Any matcher may approve the rule
-            any(m.matches(niri_state, window) for m in self.match)
-            and
-            # If any exclude rule matches, ignore it
-            all(not m.matches(niri_state, window) for m in self.exclude)
+        return self.match.matches(niri_state, window) and not self.exclude.matches(
+            niri_state, window
         )
